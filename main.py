@@ -1,111 +1,3 @@
-# import random
-# import json
-# import pickle
-# import numpy as np
-# import nltk
-# import speech_recognition as sr
-#
-# nltk.download('punkt')
-#
-# from nltk.stem import WordNetLemmatizer
-# from tensorflow.keras.models import load_model
-#
-# lemmatizer = WordNetLemmatizer()
-# # Initialize Speech Recognition
-# recognizer = sr.Recognizer()
-#
-# intents = json.loads(open('intents.json').read())
-# words = pickle.load(open('words.pkl', 'rb'))
-# classes = pickle.load(open('classes.pkl', 'rb'))
-# model = load_model('chatbotmodel.h5')
-#
-# def clean_up_sentence(sentence):
-#     sentence_words = nltk.word_tokenize(sentence)
-#     sentence_words = [lemmatizer.lemmatize(word) for word in sentence_words]
-#     return sentence_words
-#
-# def bag_of_words(sentence):
-#     sentence_words = clean_up_sentence(sentence)
-#     bag = [0] * len(words)
-#     for w in sentence_words:
-#         for i, word in enumerate(words):
-#             if word == w:
-#                 bag[i] = 1
-#     return np.array(bag)
-#
-# def predict_class(sentence):
-#     bow = bag_of_words(sentence)
-#     res = model.predict(np.array([bow]))[0]
-#     ERROR_THRESHOLD = 0.25
-#     results = [[i, r] for i, r in enumerate(res) if r > ERROR_THRESHOLD]
-#     results.sort(key=lambda x: x[1], reverse=True)
-#     return_list = []
-#     for r in results:
-#         return_list.append({'intent': classes[r[0]], 'probability': str(r[1])})
-#     return return_list
-#
-# def get_response(intents_list, intents_json):
-#     if not intents_list:
-#         return "Sorry, I couldn't understand that. Could you please rephrase your question or just let me know what kind of clinical help we can provide?"
-#     tag = intents_list[0]['intent']
-#     list_of_intents = intents_json['intents']
-#     for i in list_of_intents:
-#         if i['tag'] == tag:
-#             result = random.choice(i['responses'])
-#             return result
-#
-# def listen_for_audio():
-#     with sr.Microphone() as source:
-#         print("| Listening... (speak your query)")
-#         audio = recognizer.listen(source)
-#         try:
-#             print("| Recognizing...")
-#             query = recognizer.recognize_google(audio)
-#             print(f"| You (spoken): {query}")
-#             return query
-#         except sr.UnknownValueError:
-#             print("| Sorry, I couldn't understand that.")
-#             return ""
-#         except sr.RequestError:
-#             print("| Sorry, there was an issue with the speech recognition service.")
-#             return ""
-#
-# # Main chatbot loop
-# # Main chatbot loop
-# print("|=================== Welcome to Clinic Chatbot! ======================|")
-# print("|============================== Feel Free ============================|")
-# print("|================================== To ===============================|")
-# print("|=============== Ask your any query about our Clinic ================|")
-#
-# # Ask the user to choose an input method only once
-# while True:
-#     print("| Choose an input method: (1) Text, (2) Voice")
-#     choice = input("| Your Choice: ")
-#     if choice in ["1", "2"]:
-#         break
-#     print("| Invalid choice. Please select 1 or 2.")
-#
-# while True:
-#     if choice == "1":
-#         message = input("| You (text): ")
-#     elif choice == "2":
-#         message = listen_for_audio()
-#
-#     if not message:
-#         continue
-#
-#     if message.lower() == "bye" or message.lower() == "goodbye":
-#         print("|===================== The Program End here! =====================|")
-#         break
-#
-#     # Get the intents for the message
-#     ints = predict_class(message)
-#
-#     # Get the appropriate response based on the predicted intent
-#     res = get_response(ints, intents)
-#     print("| Your Assistant:", res)
-#
-
 import random
 import json
 import pickle
@@ -114,39 +6,43 @@ import nltk
 import speech_recognition as sr
 import pyttsx3
 
-# Download required nltk data
+from tensorflow.keras.models import load_model
+
 nltk.download('punkt')
+nltk.download('wordnet')
 
 from nltk.stem import WordNetLemmatizer
-from tensorflow.keras.models import load_model
 
 lemmatizer = WordNetLemmatizer()
 recognizer = sr.Recognizer()
 
-# Load data and models
+# Load trained chatbot model and data
 intents = json.loads(open('intents.json').read())
 words = pickle.load(open('words.pkl', 'rb'))
 classes = pickle.load(open('classes.pkl', 'rb'))
 model = load_model('chatbotmodel.h5')
 
+# Appointment management
+appointments = {}  # {phone_number: {"name": "User Name", "slot": "10:00 AM"}}
+available_slots = ["9:00 AM", "10:00 AM", "11:00 AM", "12:00 PM", "2:00 PM", "3:00 PM", "4:00 PM"]
+
+# Helper Functions
 def clean_up_sentence(sentence):
-    """Tokenizes and lemmatizes the input sentence."""
     sentence_words = nltk.word_tokenize(sentence)
-    sentence_words = [lemmatizer.lemmatize(word.lower()) for word in sentence_words]
-    return sentence_words
+    return [lemmatizer.lemmatize(word.lower()) for word in sentence_words]
+
 
 def bag_of_words(sentence):
-    """Creates a bag of words from the input sentence."""
     sentence_words = clean_up_sentence(sentence)
     bag = [0] * len(words)
-    for w in sentence_words:
+    for s in sentence_words:
         for i, word in enumerate(words):
-            if word == w:
+            if word == s:
                 bag[i] = 1
     return np.array(bag)
 
+
 def predict_class(sentence):
-    """Predicts the class (intent) of the input sentence."""
     bow = bag_of_words(sentence)
     res = model.predict(np.array([bow]))[0]
     ERROR_THRESHOLD = 0.25
@@ -154,68 +50,141 @@ def predict_class(sentence):
     results.sort(key=lambda x: x[1], reverse=True)
     return [{'intent': classes[r[0]], 'probability': str(r[1])} for r in results]
 
-def get_response(intents_list, intents_json):
-    """Fetches a response based on the predicted intent."""
-    if not intents_list:
-        return "Sorry, I couldn't understand that. Could you please rephrase?"
-    tag = intents_list[0]['intent']
-    for intent in intents_json['intents']:
-        if intent['tag'] == tag:
-            return random.choice(intent['responses'])
+
+def get_response(intent, intents_json):
+    tag = intent[0]['intent']
+    for i in intents_json['intents']:
+        if i['tag'] == tag:
+            return random.choice(i['responses']), tag
+    return "I'm sorry, I didn't understand that.", None
+
 
 def listen_for_audio():
-    """Captures and transcribes audio input from the user."""
+    """Capture and transcribe audio input from the user."""
     with sr.Microphone() as source:
-        print("| Listening... (speak your query)")
+        print("Listening... Please speak your query.")
         try:
             audio = recognizer.listen(source)
-            print("| Recognizing...")
+            print("Recognizing...")
             return recognizer.recognize_google(audio)
         except sr.UnknownValueError:
-            print("| Sorry, I couldn't understand that.")
+            print("Sorry, I didn't catch that. Could you repeat?")
             return ""
         except sr.RequestError:
-            print("| Sorry, there was an issue with the speech recognition service.")
+            print("Sorry, there was an issue with the speech recognition service.")
             return ""
 
+
 def speak(response_text):
-    """Converts chatbot's response text to speech using pyttsx3."""
+    """Convert the chatbot's response text to speech."""
     engine = pyttsx3.init()
     engine.say(response_text)
     engine.runAndWait()
 
-# Main chatbot loop
-print("|=================== Welcome to Clinic Chatbot! ======================|")
-print("|============================== Feel Free ============================|")
-print("|================================== To ===============================|")
-print("|=============== Ask any query about our Clinic =====================|")
 
-# Ask user to choose input method
-while True:
-    print("| Choose an input method: (1) Text, (2) Voice")
-    choice = input("| Your Choice: ")
-    if choice in ["1", "2"]:
-        break
-    print("| Invalid choice. Please select 1 or 2.")
+def show_slots():
+    if available_slots:
+        return f"Here are the available slots: {', '.join(available_slots)}"
+    return "No slots are currently available. Please try again later."
 
-while True:
-    if choice == "1":
-        message = input("| You (text): ")
-    elif choice == "2":
-        message = listen_for_audio()
 
-    if not message:
-        continue
+def book_slot(phone, name, slot):
+    if phone in appointments:
+        return f"Sorry, you have already booked an appointment at {appointments[phone]['slot']}."
+    if slot not in available_slots:
+        return f"Sorry, {slot} is not available. Please choose another slot."
+    appointments[phone] = {"name": name, "slot": slot}
+    available_slots.remove(slot)
+    return f"Appointment booked successfully for {name} at {slot}."
 
-    if message.lower() in ["bye", "goodbye"]:
-        print("|===================== The Program Ends Here! =====================|")
-        break
 
-    # Predict the intent and generate a response
-    intents_list = predict_class(message)
-    response = get_response(intents_list, intents)
-    print("| Your Assistant:", response)
+def cancel_appointment(phone):
+    if phone in appointments:
+        appointment = appointments.pop(phone)
+        available_slots.append(appointment["slot"])
+        available_slots.sort()  # Keep slots ordered
+        return f"Your appointment at {appointment['slot']} has been canceled successfully."
+    return "No appointment found for the provided phone number."
 
-    # Speak the response using pyttsx3
-    speak(response)
 
+# Main Chatbot Logic
+def chatbot():
+    user_context = {}
+    print("Welcome to the Appointment Booking Assistant!")
+    print("You can ask about our services, book appointments, or cancel them.")
+    print("Choose an input method: (1) Text, (2) Voice")
+    choice = input("Your choice: ").strip()
+
+    while True:
+        if choice == "1":
+            user_input = input("You: ").strip()
+        elif choice == "2":
+            user_input = listen_for_audio()
+
+        if not user_input:
+            continue
+
+        if user_input.lower() in ['exit', 'bye']:
+            print("Assistant: Goodbye! Have a great day!")
+            speak("Goodbye! Have a great day!")
+            break
+
+        intents_list = predict_class(user_input)
+        response, tag = get_response(intents_list, intents)
+
+        # Handle appointment booking flow
+        if tag == "book_appointment":
+            if "name" not in user_context:
+                response = "May I know your name, please?"
+                user_context["context"] = "get_name"
+            elif "phone" not in user_context:
+                response = "Can I have your phone number for the booking?"
+                user_context["context"] = "get_phone"
+            elif "slot" not in user_context:
+                response = show_slots() + " Which time slot would you like to book?"
+                user_context["context"] = "get_slot"
+            else:
+                name = user_context["name"]
+                phone = user_context["phone"]
+                slot = user_context["slot"]
+                response = book_slot(phone, name, slot)
+                user_context.clear()
+
+        elif tag == "cancel_appointment":
+            response = "Can you provide the phone number used for the booking?"
+            user_context["context"] = "cancel_phone"
+
+        elif user_context.get("context") == "cancel_phone":
+            if user_input.isdigit():
+                response = cancel_appointment(user_input)
+                user_context.clear()
+            else:
+                response = "Please enter a valid phone number."
+
+        elif user_context.get("context") == "get_name":
+            user_context["name"] = user_input
+            response = "Thank you! Now, may I have your phone number?"
+            user_context["context"] = "get_phone"
+
+        elif user_context.get("context") == "get_phone":
+            if user_input.isdigit():
+                user_context["phone"] = user_input
+                response = show_slots() + " Which time slot would you like to book?"
+                user_context["context"] = "get_slot"
+            else:
+                response = "Please enter a valid phone number."
+
+        elif user_context.get("context") == "get_slot":
+            user_context["slot"] = user_input
+            name = user_context["name"]
+            phone = user_context["phone"]
+            response = book_slot(phone, name, user_input)
+            user_context.clear()
+
+        # Print and speak the response
+        print("Assistant:", response)
+        speak(response)
+
+
+if __name__ == "__main__":
+    chatbot()
